@@ -1,0 +1,6 @@
+discord.py==2.3.2
+python-dotenv
+aiohttp
+aiosqlite
+langdetect
+huggingface_hub>=0.23
