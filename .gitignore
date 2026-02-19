@@ -1,6 +1,9 @@
 # Environment
 .env
 
+# User guide (internal only)
+GUIDE.md
+
 # Database
 database/bot.db
 
