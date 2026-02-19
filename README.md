@@ -69,8 +69,3 @@ EchoKeeper/
 └── utils/
     ├── embeds.py
     └── constants.py
-```
-
-## License
-
-MIT
