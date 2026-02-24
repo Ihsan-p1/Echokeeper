@@ -9,6 +9,10 @@ DISCORD_TOKEN: str = os.getenv("DISCORD_TOKEN", "")
 # ── HuggingFace ───────────────────────────────────────
 HF_API_TOKEN: str = os.getenv("HF_API_TOKEN", "")
 
+# ── Translation Logic ─────────────────────────────────
+ACTIVE_BACKEND: str = os.getenv("ECHOKEEPER_BACKEND", "nllb")
+NLLB_MODEL_ID: str = os.getenv("NLLB_MODEL_ID", "facebook/nllb-200-distilled-1.3B")
+
 # ── Translate defaults ────────────────────────────────
 DEFAULT_TARGET_LANG: str = os.getenv("DEFAULT_TARGET_LANG", "en")
 
@@ -19,6 +23,7 @@ AUTO_TRANSLATE_CHANNELS: list[str] = (
     if _raw_channels else []
 )
 
-# ── Rate-limit ────────────────────────────────────────
+# ── Tuning & Hardware ─────────────────────────────────
 COOLDOWN_SECONDS: int = 3
 QUEUE_SLEEP_SECONDS: float = 1.0
+USE_FP16: bool = os.getenv("ECHOKEEPER_FP16", "true").lower() == "true"

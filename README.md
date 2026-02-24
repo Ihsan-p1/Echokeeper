@@ -1,71 +1,69 @@
-# EchoKeeper
+# EchoKeeper: High-Performance Local Translation Engine
 
-A Discord bot for real-time text translation across Vietnamese, English, and Indonesian, with support for 14 additional languages. Built with discord.py and Helsinki-NLP open-source models via HuggingFace.
+EchoKeeper is a private, high-performance translation service designed for local execution. It leverages the NLLB-200 (No Language Left Behind) model by Meta AI to provide high-quality translations across 200 languages without requiring external internet access.
 
-## Features
+This repository specifically focuses on the EchoKeeper Discord Translator Bot and its integration with optimized local inference engines.
 
-- Prefix command `!tl` and slash command `/tl` for on-demand translation
-- Reaction-based translation trigger
-- Per-channel auto-translate
-- Per-user language preference stored in SQLite
-- Async queue to avoid API rate limits
+## Key Features
 
-## Requirements
+- **Privacy-First**: All translations are performed locally on your hardware. No data is sent to external APIs (Google, DeepL, etc.).
+- **NLLB-200 Integration**: Supports the 1.3B parameter model for high-precision translations.
+- **Slang Normalization**: Internal dictionary for Vietnamese and Indonesian informal registers to ensure natural translation output.
+- **Performance Optimized**: Supports FP16 precision for significant speedups on NVIDIA GPUs.
+- **Context-Aware**: Maintains conversation history for improved coherence and pronoun resolution.
 
-- Python 3.10+
-- A Discord bot token ([discord.com/developers](https://discord.com/developers))
-- A HuggingFace API token ([huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)) — free
+## Technical Requirements
+
+- **Python**: 3.8 or higher.
+- **CUDA (Optional)**: Highly recommended for near-instant inference using the 1.3B model.
+- **RAM/VRAM**: 
+  - ~6GB for 1.3B model (FP16).
+  - ~3GB for 600M model (FP16).
 
 ## Installation
 
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/EchoKeeper.git
+   cd EchoKeeper
+   ```
+
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Configure environment variables:
+   Copy the example file and fill in your Discord token:
+   ```bash
+   cp .env.example .env
+   ```
+
+## Configuration Guide
+
+EchoKeeper can be configured via the `.env` file. Key parameters include:
+
+| Variable | Description | Default |
+|---|---|---|
+| `ECHOKEEPER_BACKEND` | Selection of translation engine (`nllb` or `opus`). | `nllb` |
+| `NLLB_MODEL_ID` | The HuggingFace model identifier. | `facebook/nllb-200-distilled-1.3B` |
+| `ECHOKEEPER_FP16` | Enables half-precision inference on GPUs. | `true` |
+| `DISCORD_TOKEN` | Your Discord Bot token for authentication. | Required |
+
+## Usage
+
+### Launching the CLI
+For testing and quick translations, use the Command Line Interface:
 ```bash
-git clone https://github.com/Ihsan-p1/Echokeeper.git
-cd Echokeeper
-pip install -r requirements.txt
-cp .env.example .env
+python cli.py --mode vi-en
 ```
 
-Edit `.env` with your tokens, then run:
-
+### Launching the Discord Bot
+To deploy EchoKeeper on a Discord server:
 ```bash
 python bot.py
 ```
 
-## Commands
+## Maintenance & Fine-Tuning
+The repository includes a fine-tuning scaffold in `scripts/finetune_nllb.py` for users wishing to further specialize the model on specific datasets.
 
-| Command | Description |
-|---|---|
-| `!tl <text>` | Translate to your default language |
-| `!tl <lang> <text>` | Translate to a specific language |
-| `/tl` | Slash command version of `!tl` |
-| `/lang <code>` | Set your default target language |
-| `/optin` | Toggle auto-translate for your messages |
-| `/myinfo` | View your current settings |
-| `/languages` | List all supported language codes |
-| `/setchannel <lang>` | (Admin) Enable auto-translate in this channel |
-| `/removechannel` | (Admin) Disable auto-translate in this channel |
-| React with globe emoji | Translate a message to your default language |
-
-## Supported Languages
-
-`en` `id` `vi` `ms` `zh` `ja` `ko` `ar` `fr` `de` `es` `pt` `ru` `hi`
-
-## Project Structure
-
-```
-EchoKeeper/
-├── bot.py
-├── config.py
-├── cogs/
-│   ├── translate.py
-│   └── settings.py
-├── services/
-│   ├── translator.py
-│   ├── language_detect.py
-│   └── queue.py
-├── database/
-│   ├── db.py
-│   └── models.py
-└── utils/
-    ├── embeds.py
-    └── constants.py
