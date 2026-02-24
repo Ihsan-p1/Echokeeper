@@ -25,7 +25,7 @@ class TranslateCog(commands.Cog, name="Translate"):
         self.bot = bot
 
     async def cog_load(self) -> None:
-        await init_db()
+        # DB initialization moved to bot.startup()
         translate_queue.start()
         log.info("TranslateCog loaded.")
 
@@ -33,6 +33,27 @@ class TranslateCog(commands.Cog, name="Translate"):
         translate_queue.stop()
 
     # ─── Helper ──────────────────────────────────────────────────────────────
+
+    async def _send_response(
+        self,
+        target: discord.Message | discord.Interaction,
+        content: str | None = None,
+        embed: discord.Embed | None = None,
+        ephemeral: bool = False,
+    ) -> None:
+        """Unified helper to send response to Message or Interaction."""
+        if isinstance(target, discord.Message):
+            await target.reply(content=content, embed=embed, mention_author=False)
+        else:
+            if target.response.is_done():
+                await target.followup.send(content=content, embed=embed, ephemeral=ephemeral)
+            else:
+                await target.response.send_message(content=content, embed=embed, ephemeral=ephemeral)
+
+    async def _get_target_lang(self, user_id: int) -> str:
+        """Helper to get user's target language with fallback to default."""
+        settings = await get_user_settings(user_id)
+        return settings.target_lang or DEFAULT_TARGET_LANG
 
     async def _do_translate(
         self,
@@ -44,10 +65,7 @@ class TranslateCog(commands.Cog, name="Translate"):
     ) -> None:
         if len(text) > MAX_TEXT_LENGTH:
             msg = f"Teks terlalu panjang (maks {MAX_TEXT_LENGTH} karakter)."
-            if isinstance(reply_target, discord.Message):
-                await reply_target.reply(embed=error_embed(msg), mention_author=False)
-            else:
-                await reply_target.followup.send(embed=error_embed(msg), ephemeral=True)
+            await self._send_response(reply_target, embed=error_embed(msg), ephemeral=True)
             return
 
         try:
@@ -55,19 +73,11 @@ class TranslateCog(commands.Cog, name="Translate"):
                 translate_text(text, target=target, source=source)
             )
         except TranslationError as e:
-            embed = error_embed(str(e))
-            if isinstance(reply_target, discord.Message):
-                await reply_target.reply(embed=embed, mention_author=False)
-            else:
-                await reply_target.followup.send(embed=embed, ephemeral=True)
+            await self._send_response(reply_target, embed=error_embed(str(e)), ephemeral=True)
             return
 
         embed = translation_embed(text, translated, source, target, author)
-
-        if isinstance(reply_target, discord.Message):
-            await reply_target.reply(embed=embed, mention_author=False)
-        else:
-            await reply_target.followup.send(embed=embed)
+        await self._send_response(reply_target, embed=embed)
 
     # ─── Command: !tl ────────────────────────────────────────────────────────
 
@@ -84,8 +94,7 @@ class TranslateCog(commands.Cog, name="Translate"):
             text = parts[1]
         else:
             text = args
-            settings = await get_user_settings(ctx.author.id)
-            target = settings.target_lang or DEFAULT_TARGET_LANG
+            target = await self._get_target_lang(ctx.author.id)
 
         source = detect_language(text)
         async with ctx.typing():
@@ -106,8 +115,7 @@ class TranslateCog(commands.Cog, name="Translate"):
     ) -> None:
         await interaction.response.defer()
         if not target:
-            settings = await get_user_settings(interaction.user.id)
-            target = settings.target_lang or DEFAULT_TARGET_LANG
+            target = await self._get_target_lang(interaction.user.id)
 
         target = target.lower()
         if target not in SUPPORTED_LANGUAGES:
@@ -162,8 +170,7 @@ class TranslateCog(commands.Cog, name="Translate"):
             return
 
         user = self.bot.get_user(payload.user_id) or await self.bot.fetch_user(payload.user_id)
-        settings = await get_user_settings(payload.user_id)
-        target = settings.target_lang or DEFAULT_TARGET_LANG
+        target = await self._get_target_lang(payload.user_id)
         source = detect_language(message.content)
 
         await self._do_translate(message.content, source, target, message, user)

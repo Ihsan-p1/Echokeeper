@@ -50,8 +50,8 @@ def _load_model():
         else:
             dtype = torch.float32
 
-        print(f"\n  ⏳ Loading NLLB-200 model ({dev_label}) …", flush=True)
-        print(f"  {MODEL_ID} [Precision: {dtype}]", flush=True)
+        log.info(f"Loading NLLB-200 model ({dev_label}) ...")
+        log.info(f"{MODEL_ID} [Precision: {dtype}]")
         
         # Using more direct access to avoid potential __init__ import issues
         _tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL_ID)
@@ -63,7 +63,7 @@ def _load_model():
         _model.to(_device)
         _model.eval()
 
-        print(f"  ✅ Model loaded on {dev_label}\n", flush=True)
+        log.info(f"Model loaded on {dev_label}")
         log.info(f"NLLB-200 1.3B ({dtype}) loaded on {_device}")
 
 

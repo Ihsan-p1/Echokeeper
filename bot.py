@@ -3,6 +3,8 @@ import asyncio
 import logging
 from discord.ext import commands
 from config import DISCORD_TOKEN
+from database.db import init_db
+from services.nllb_backend import preload as preload_nllb
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,6 +28,18 @@ def create_bot() -> commands.Bot:
 
 
 bot = create_bot()
+
+
+async def startup() -> None:
+    """Run startup tasks: DB init, model preloading."""
+    log.info("Starting up EchoKeeper...")
+    await init_db()
+    # Preload NLLB model in a separate thread to avoid blocking the event loop
+    try:
+        log.info("Preloading NLLB-200 model...")
+        await asyncio.to_thread(preload_nllb)
+    except Exception as e:
+        log.warning(f"Failed to preload NLLB model: {e}")
 
 
 async def load_cogs() -> None:
@@ -79,6 +93,7 @@ async def on_command_error(ctx: commands.Context, error: Exception) -> None:
 
 async def main() -> None:
     async with bot:
+        await startup()
         await load_cogs()
         await bot.start(DISCORD_TOKEN)
 
