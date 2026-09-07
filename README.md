@@ -1,69 +1,167 @@
-# EchoKeeper: High-Performance Local Translation Engine
+# EchoKeeper: local translation bot for Discord
 
-EchoKeeper is a private, high-performance translation service designed for local execution. It leverages the NLLB-200 (No Language Left Behind) model by Meta AI to provide high-quality translations across 200 languages without requiring external internet access.
+EchoKeeper translates Discord messages on your own hardware. It runs NLLB-200 locally, so
+after the first model download nothing leaves the machine: no Google Translate, no DeepL,
+no API key. The same engine is reachable from a terminal CLI.
 
-This repository specifically focuses on the EchoKeeper Discord Translator Bot and its integration with optimized local inference engines.
+Slang is handled before the model sees it. Vietnamese and Indonesian chat text is
+normalised to formal spellings first, because NLLB is trained on formal corpora and
+mistranslates informal registers.
 
-## Key Features
+## Features
 
-- **Privacy-First**: All translations are performed locally on your hardware. No data is sent to external APIs (Google, DeepL, etc.).
-- **NLLB-200 Integration**: Supports the 1.3B parameter model for high-precision translations.
-- **Slang Normalization**: Internal dictionary for Vietnamese and Indonesian informal registers to ensure natural translation output.
-- **Performance Optimized**: Supports FP16 precision for significant speedups on NVIDIA GPUs.
-- **Context-Aware**: Maintains conversation history for improved coherence and pronoun resolution.
+- Prefix and slash commands, a 🌐 reaction trigger, and per-channel auto-translation.
+- Two runtimes for the same model: CTranslate2 when a converted model directory is
+  present, Transformers with PyTorch otherwise. The fallback is automatic.
+- Slang dictionaries with 257 Vietnamese, 103 Indonesian, and 105 English entries, applied
+  before translation and cleaned up after.
+- Per-user target language and per-channel target language, stored in SQLite.
+- One translation at a time through an internal queue, with a 3-second per-user cooldown.
 
-## Technical Requirements
+## Commands
 
-- **Python**: 3.8 or higher.
-- **CUDA (Optional)**: Highly recommended for near-instant inference using the 1.3B model.
-- **RAM/VRAM**: 
-  - ~6GB for 1.3B model (FP16).
-  - ~3GB for 600M model (FP16).
+| Command | What it does |
+|---|---|
+| `!tl <text>` | Translate to your target language |
+| `!tl <lang> <text>` | Translate to a specific language code |
+| `/tl` | Same as `!tl`, as a slash command |
+| `/lang <code>` | Set your personal target language |
+| `/optin` | Opt in to being auto-translated |
+| `/myinfo` | Show your current settings |
+| `/setchannel <lang>` | Auto-translate this channel into `lang`. Needs Manage Channels. |
+| `/removechannel` | Stop auto-translating this channel |
+| `/languages` | List the supported language codes |
 
-## Installation
+React 🌐 to any message to get it translated into your own target language.
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/EchoKeeper.git
-   cd EchoKeeper
-   ```
+In an auto-translate channel, every message is detected and translated unless it is
+already in the channel's target language.
 
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+## Languages
 
-3. Configure environment variables:
-   Copy the example file and fill in your Discord token:
-   ```bash
-   cp .env.example .env
-   ```
+NLLB-200 covers 200 languages. EchoKeeper exposes 15 of them by short code, mapped to
+NLLB's BCP-47 codes in `utils/constants.py`:
 
-## Configuration Guide
+`en`, `id`, `vi`, `ms`, `zh`, `ja`, `ko`, `ar`, `fr`, `de`, `es`, `pt`, `ru`, `th`, `hi`
 
-EchoKeeper can be configured via the `.env` file. Key parameters include:
+Source language is detected with `langdetect`, which is unreliable on very short strings,
+so it falls back to Indonesian. Messages longer than 1000 characters are rejected.
 
-| Variable | Description | Default |
-|---|---|---|
-| `ECHOKEEPER_BACKEND` | Selection of translation engine (`nllb` or `opus`). | `nllb` |
-| `NLLB_MODEL_ID` | The HuggingFace model identifier. | `facebook/nllb-200-distilled-1.3B` |
-| `ECHOKEEPER_FP16` | Enables half-precision inference on GPUs. | `true` |
-| `DISCORD_TOKEN` | Your Discord Bot token for authentication. | Required |
+## Requirements
 
-## Usage
+- Python 3.10 or newer (the code uses `str | None` annotations)
+- About 6 GB of VRAM for the 1.3B model in FP16, or about 3 GB for the 600M variant.
+  CPU works and is slower.
+- A Discord bot token, with the Message Content intent enabled for prefix commands
 
-### Launching the CLI
-For testing and quick translations, use the Command Line Interface:
+The first run downloads roughly 5.2 GB of model weights into `~/.cache/huggingface/`.
+
+## Install
+
 ```bash
-python cli.py --mode vi-en
+git clone https://github.com/Ihsan-p1/Echokeeper.git
+cd Echokeeper
+
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+source .venv/bin/activate       # Linux, macOS
+
+pip install -r requirements.txt
+cp .env.example .env
 ```
 
-### Launching the Discord Bot
-To deploy EchoKeeper on a Discord server:
+Then put your token in `.env`.
+
+## Configuration
+
+Everything is read from `.env` through `config.py`:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `DISCORD_TOKEN` | required | Bot token |
+| `ECHOKEEPER_BACKEND` | `nllb` | Translation engine |
+| `NLLB_MODEL_ID` | `facebook/nllb-200-distilled-1.3B` | HuggingFace model id |
+| `ECHOKEEPER_FP16` | `true` | Half precision on GPU |
+| `DEFAULT_TARGET_LANG` | `en` | Target language before a user sets their own |
+| `AUTO_TRANSLATE_CHANNELS` | empty | Comma-separated channel IDs translated on startup |
+| `NLLB_CT2_MODEL_DIR` | `models/nllb-ct2-int8` | CTranslate2 model directory |
+| `NLLB_TOKENIZER_ID` | same as `NLLB_MODEL_ID` | Tokenizer for the CT2 path |
+| `NLLB_CT2_DEVICE` | `cuda` | Device for CTranslate2 |
+| `NLLB_CT2_COMPUTE_TYPE` | `int8_float16` | Quantisation for CTranslate2 |
+
+## CTranslate2 for faster inference
+
+CTranslate2 runs the same model with less VRAM and lower latency. Convert the weights
+once:
+
+```bash
+pip install ctranslate2 sentencepiece
+
+ct2-transformers-converter \
+  --model facebook/nllb-200-distilled-1.3B \
+  --output_dir models/nllb-ct2-int8 \
+  --quantization int8_float16
+```
+
+Then point `.env` at the output directory:
+
+```bash
+NLLB_CT2_MODEL_DIR=models/nllb-ct2-int8
+NLLB_TOKENIZER_ID=facebook/nllb-200-distilled-1.3B
+NLLB_CT2_DEVICE=cuda
+NLLB_CT2_COMPUTE_TYPE=int8_float16
+```
+
+If that directory is missing or fails to load, EchoKeeper logs it and uses the Transformers
+backend instead.
+
+## Running
+
+The Discord bot:
+
 ```bash
 python bot.py
 ```
 
-## Maintenance & Fine-Tuning
-The repository includes a fine-tuning scaffold in `scripts/finetune_nllb.py` for users wishing to further specialize the model on specific datasets.
+The CLI, which shares the translation service and the slang normaliser:
 
+```bash
+python cli.py              # free mode, use !tl commands
+python cli.py vi-en        # Vietnamese to English, type text directly
+python cli.py en-vi
+python cli.py vi-id
+python cli.py auto         # detect the source language per line
+```
+
+## Project structure
+
+```
+EchoKeeper/
+├── bot.py                        # Discord entrypoint, loads the cogs
+├── cli.py                        # Terminal translator with modes
+├── config.py                     # Environment configuration
+├── cogs/
+│   ├── translate.py              # !tl, /tl, 🌐 reaction, auto-translate listener
+│   └── settings.py               # /lang, /optin, /myinfo, /setchannel, /removechannel, /languages
+├── services/
+│   ├── translator.py             # Backend dispatch
+│   ├── nllb_backend.py           # NLLB via CTranslate2 or Transformers
+│   ├── slang_normalizer.py       # VI/ID/EN slang dictionaries, pre and post processing
+│   ├── language_detect.py        # langdetect wrapper with an Indonesian fallback
+│   └── queue.py                  # Serialises translation requests
+├── database/
+│   ├── db.py                     # aiosqlite connection
+│   └── models.py                 # User and channel settings
+├── utils/
+│   ├── constants.py              # Language codes, reaction emoji, length limit
+│   └── embeds.py                 # Response formatting
+├── scripts/finetune_nllb.py      # Fine-tuning scaffold
+└── data/slang_parallel.jsonl     # 10 parallel slang examples for that scaffold
+```
+
+## Fine-tuning
+
+`scripts/finetune_nllb.py` is a scaffold, not a trained pipeline.
+`data/slang_parallel.jsonl` holds 10 examples, which is enough to check that the script
+runs and nowhere near enough to specialise the model. Bring your own parallel data before
+expecting a quality change.
