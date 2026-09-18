@@ -25,3 +25,12 @@ env/
 
 # Logs
 *.log
+
+# Local models (CTranslate2 / GGUF / HF exports)
+models/
+
+# AI assistant files, local only
+CLAUDE.md
+.claude/
+docs/superpowers/
+AUDIT.md
